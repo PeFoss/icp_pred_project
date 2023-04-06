@@ -10,6 +10,8 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split, KFold
 
 import tensorflow as tf
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+tf.config.list_physical_devices('GPU')
 from tensorflow import keras
 import random
 
