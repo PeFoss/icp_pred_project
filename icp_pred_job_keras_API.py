@@ -41,9 +41,9 @@ tf.random.set_seed(1234)
 np.random.seed(1234)
 
 
-BASE_PATH = pathlib.Path().resolve()
-ICP_DATA_PATH = BASE_PATH / "Project1-Data/nICP"
-
+BASE_PATH = pathlib.Path().resolve().parent.parent.parent
+ICP_DATA_PATH = BASE_PATH / "scratch/gilbreth/pfosscon/nICP"
+print(ICP_DATA_PATH)
 df = pd.DataFrame()
 
 for path in ICP_DATA_PATH.glob('*.csv'):
@@ -206,4 +206,4 @@ random_index = int(random.random() * (df_predicts.size - 100))
 ax4 = sns.lineplot(data=df_predicts.iloc[random_index: random_index + 100])
 ax4.set(ylim=(0, 1))
 experiment.log_figure(figure_name='predicts_seq_3', figure=ax4.figure)
-plt.show()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plt.show()
