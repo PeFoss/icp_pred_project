@@ -29,7 +29,7 @@ lr = tf.keras.optimizers.schedules.ExponentialDecay(
       decay_steps=100000,
       decay_rate=0.98)
 batch_size = 128
-epochs = 100
+epochs = 200
 
 hidden_size = 1024
 input_size_encoder = 2

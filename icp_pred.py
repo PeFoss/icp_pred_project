@@ -208,7 +208,9 @@ dropout_rate = 0.5
 tf.random.set_seed(1234)
 np.random.seed(1234)
 
-"""####Encoder"""
+"""
+Model Based on PYTORCH Model
+"""
 
 # class Encoder(tf.keras.layers.Layer):
 #   def __init__(self, input_size,  hidden_size, num_layers, p):
@@ -553,186 +555,187 @@ from tensorflow.keras.layers import Input, LSTM, Dense
 #           epochs=epochs)
 
 
-kfold = KFold(n_splits=5, shuffle=True)
-kfold_performances = []
-for train, test in kfold.split(Xtrain):
+# kfold = KFold(n_splits=5, shuffle=True)
+# kfold_performances = []
+# for train, test in kfold.split(Xtrain):
 
-  Xtest_validate = Xtrain[test]
-  ytest_validate = ytrain[test]
-
-
-  Xtrain_validate = Xtrain[train]
-  ytrain_validate = ytrain[train]
+#   Xtest_validate = Xtrain[test]
+#   ytest_validate = ytrain[test]
 
 
-  y_target_train = ytrain_validate[:, :-1, :]
-  y_target_train = np.concatenate((np.zeros([ytrain_validate.shape[0], 1, ytrain_validate.shape[2]]), y_target_train), axis=1)
-
-  y_target_test = ytest_validate[:, :-1, :]
-  y_target_test = np.concatenate((np.zeros([ytest_validate.shape[0], 1, ytest_validate.shape[2]]), y_target_test), axis=1)
-
-  encoder_inputs = Input(shape=(None, input_size_encoder))
-  encoder = LSTM(hidden_size, return_state=True, return_sequences=True)
-  encoder_outputs, state_h, state_c = encoder(encoder_inputs)
-  # We discard `encoder_outputs` and only keep the states.
-  encoder_states = [state_h, state_c]
-
-  # Set up the decoder, using `encoder_states` as initial state.
-  decoder_inputs = Input(shape=(None, input_size_decoder))
-  # We set up our decoder to return full output sequences,
-  # and to return internal states as well. We don't use the 
-  # return states in the training model, but we will use them in inference.
-  decoder_lstm = LSTM(hidden_size, return_sequences=True, return_state=True)
-  decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
-                                      initial_state=encoder_states)
-  decoder_dense = Dense(output_size, activation=None)
-  decoder_outputs = decoder_dense(decoder_outputs)
-
-  # Define the model that will turn
-  # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
-  model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+#   Xtrain_validate = Xtrain[train]
+#   ytrain_validate = ytrain[train]
 
 
-  model.compile(optimizer=keras.optimizers.Adam(lr), loss='mse')
-  model.fit([Xtrain_validate, y_target_train], ytrain_validate,
-          batch_size=batch_size,
-          epochs=epochs,
-          verbose = 1)
-  performace = model.evaluate([Xtest_validate, y_target_test], ytest_validate)
-  kfold_performances.append(performace)
-print('Result of Kfold validation', kfold_performances)
+#   y_target_train = ytrain_validate[:, :-1, :]
+#   y_target_train = np.concatenate((np.zeros([ytrain_validate.shape[0], 1, ytrain_validate.shape[2]]), y_target_train), axis=1)
 
-#Inference 
+#   y_target_test = ytest_validate[:, :-1, :]
+#   y_target_test = np.concatenate((np.zeros([ytest_validate.shape[0], 1, ytest_validate.shape[2]]), y_target_test), axis=1)
 
-encoder_model = Model(encoder_inputs, encoder_states)
-decoder_state_input_h = Input(shape=(hidden_size,))
-decoder_state_input_c = Input(shape=(hidden_size,))
-decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-decoder_outputs, state_h, state_c = decoder_lstm(
-    decoder_inputs, initial_state=decoder_states_inputs)
-decoder_states = [state_h, state_c]
-decoder_outputs = decoder_dense(decoder_outputs)
-decoder_model = Model(
-    [decoder_inputs] + decoder_states_inputs,
-    [decoder_outputs] + decoder_states)
+#   encoder_inputs = Input(shape=(None, input_size_encoder))
+#   encoder = LSTM(hidden_size, return_state=True, return_sequences=True)
+#   encoder_outputs, state_h, state_c = encoder(encoder_inputs)
+#   # We discard `encoder_outputs` and only keep the states.
+#   encoder_states = [state_h, state_c]
 
-def seq2seq(input_test):
-  state = encoder_model.predict(input_test)
+#   # Set up the decoder, using `encoder_states` as initial state.
+#   decoder_inputs = Input(shape=(None, input_size_decoder))
+#   # We set up our decoder to return full output sequences,
+#   # and to return internal states as well. We don't use the 
+#   # return states in the training model, but we will use them in inference.
+#   decoder_lstm = LSTM(hidden_size, return_sequences=True, return_state=True)
+#   decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
+#                                       initial_state=encoder_states)
+#   decoder_dense = Dense(output_size, activation=None)
+#   decoder_outputs = decoder_dense(decoder_outputs)
 
-  target_seq = np.zeros((input_test.shape[0], 1, 1))
-
-  target_len = input_test.shape[1]
-  print(target_len)
-
-  stop_condition = False 
-
-  outputs = []
-
-  seq_index = 0
-
-  while not stop_condition:
-    output_tokens, h, c = decoder_model.predict(
-            [target_seq] + state)
-
-    state = [h, c]
-
-    outputs.append(output_tokens)
-
-    target_seq = output_tokens
-
-    seq_index += 1
-
-    if seq_index == target_len:
-      stop_condition = True
-
-    if stop_condition:
-      break
-
-  return np.concatenate(outputs, axis=1)
+#   # Define the model that will turn
+#   # `encoder_input_data` & `decoder_input_data` into `decoder_target_data`
+#   model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
 
+#   model.compile(optimizer=keras.optimizers.Adam(lr), loss='mse')
+#   model.fit([Xtrain_validate, y_target_train], ytrain_validate,
+#           batch_size=batch_size,
+#           epochs=epochs,
+#           verbose = 1)
+#   performace = model.evaluate([Xtest_validate, y_target_test], ytest_validate)
+#   kfold_performances.append(performace)
+# print('Result of Kfold validation', kfold_performances)
 
-outputs = seq2seq(Xtest)
+# #Inference 
 
-print("outputs", outputs)
+# encoder_model = Model(encoder_inputs, encoder_states)
+# decoder_state_input_h = Input(shape=(hidden_size,))
+# decoder_state_input_c = Input(shape=(hidden_size,))
+# decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+# decoder_outputs, state_h, state_c = decoder_lstm(
+#     decoder_inputs, initial_state=decoder_states_inputs)
+# decoder_states = [state_h, state_c]
+# decoder_outputs = decoder_dense(decoder_outputs)
+# decoder_model = Model(
+#     [decoder_inputs] + decoder_states_inputs,
+#     [decoder_outputs] + decoder_states)
 
-print("shape outputs", outputs.shape)
+# def seq2seq(input_test):
+#   state = encoder_model.predict(input_test)
 
-outputs, ytest, Xtest = outputs.flatten(), ytest.flatten(), Xtest[:, :, 1].flatten()
-ytest = pd.DataFrame(ytest)
-predictX = pd.DataFrame(outputs)
-Xtest = pd.DataFrame(Xtest)
-df_predicts = pd.concat([ytest, predictX, Xtest], axis=1)
-df_predicts.columns = ['Y test', 'Y Predicts', 'X test']
-df_predicts.set_index('X test', inplace=True)
+#   target_seq = np.zeros((input_test.shape[0], 1, 1))
 
-#Model based on slides
+#   target_len = input_test.shape[1]
+#   print(target_len)
 
-# class Encoder(tf.keras.layers.Layer):
-#   def __init__(self, num_features, hidden_size, dropout):
-#     self.dropout = tf.keras.layers.Dropout(dropout)
-#     self.rnn = tf.keras.layers.LSTM(hidden_size, input_size=(None, num_features), return_sequences=True, return_state=True)
+#   stop_condition = False 
 
-#   def call(self, x):
-#     x = self.dropout(x)
+#   outputs = []
 
-#     encoder_outputs, hidden_state, cell_state = self.rnn(x)
+#   seq_index = 0
 
-#     return encoder_outputs, hidden_state, cell_state
+#   while not stop_condition:
+#     output_tokens, h, c = decoder_model.predict(
+#             [target_seq] + state)
+
+#     state = [h, c]
+
+#     outputs.append(output_tokens)
+
+#     target_seq = output_tokens
+
+#     seq_index += 1
+
+#     if seq_index == target_len:
+#       stop_condition = True
+
+#     if stop_condition:
+#       break
+
+#   return np.concatenate(outputs, axis=1)
 
 
-# class Attention(tf.keras.layers.Layer):
-#   def __init__(self):
-#     super().__init__()
-#     self.mha = tf.keras.layers.MultiHeadAttention(key_dim=3, num_heads=1)
-#     self.layernorm = tf.keras.layers.LayerNormalization()
-#     self.add = tf.keras.layers.Add()
 
-#   def call(self, x, context):
+# outputs = seq2seq(Xtest)
 
-#     attn_output = self.mha(
-#         query=x,
-#         value=context,
-#         )
+# print("outputs", outputs)
+
+# print("shape outputs", outputs.shape)
+
+# outputs, ytest, Xtest = outputs.flatten(), ytest.flatten(), Xtest[:, :, 1].flatten()
+# ytest = pd.DataFrame(ytest)
+# predictX = pd.DataFrame(outputs)
+# Xtest = pd.DataFrame(Xtest)
+# df_predicts = pd.concat([ytest, predictX, Xtest], axis=1)
+# df_predicts.columns = ['Y test', 'Y Predicts', 'X test']
+# df_predicts.set_index('X test', inplace=True)
+
+"""
+Model with ATTENTION
+"""
+class Encoder(tf.keras.layers.Layer):
+  def __init__(self, num_features, hidden_size, dropout):
+    self.dropout = tf.keras.layers.Dropout(dropout)
+    self.rnn = tf.keras.layers.LSTM(hidden_size, input_size=(None, num_features), return_sequences=True, return_state=True)
+
+  def call(self, x):
+    x = self.dropout(x)
+
+    encoder_outputs, hidden_state, cell_state = self.rnn(x)
+
+    return encoder_outputs, hidden_state, cell_state
+
+
+class Attention(tf.keras.layers.Layer):
+  def __init__(self):
+    super().__init__()
+    self.mha = tf.keras.layers.MultiHeadAttention(key_dim=3, num_heads=1)
+    self.layernorm = tf.keras.layers.LayerNormalization()
+    self.add = tf.keras.layers.Add()
+
+  def call(self, x, context):
+
+    attn_output = self.mha(
+        query=x,
+        value=context,
+        )
 
   
-#     x = self.add([x, attn_output])
-#     x = self.layernorm(x)
+    x = self.add([x, attn_output])
+    x = self.layernorm(x)
 
-#     return x
+    return x
 
-# class Decoder(tf.keras.layers.Layer):
-#   def __init__(self, num_features, hidden_size, dropout):
-#     self.droupout = tf.keras.layers.Dropout(dropout)
-#     self.rnn = tf.keras.layers.LSTM(hidden_size, input_size=(None, num_features), return_sequences=True, return_state=True)
-#     self.dense = tf.keras.layers.Dense(output_size, activation='linear')
-#     self.attention = Attention()
+class Decoder(tf.keras.layers.Layer):
+  def __init__(self, num_features, hidden_size, dropout):
+    self.droupout = tf.keras.layers.Dropout(dropout)
+    self.rnn = tf.keras.layers.LSTM(hidden_size, input_size=(None, num_features), return_sequences=True, return_state=True)
+    self.dense = tf.keras.layers.Dense(output_size, activation='linear')
+    self.attention = Attention()
   
-#   def call(self, x, encoder_output, hidden, cell):
-#     x = self.dropout(x)
+  def call(self, x, encoder_output, hidden, cell):
+    x = self.dropout(x)
 
-#     rnn_output = self.rnn(x, initial_state=[hidden, cell])
+    rnn_output = self.rnn(x, initial_state=[hidden, cell])
 
-#     dense_input = self.attention(rnn_output, encoder_output)
+    dense_input = self.attention(rnn_output, encoder_output)
 
-#     output = self.dense(dense_input)
+    output = self.dense(dense_input)
 
-#     return output
+    return output
 
 
-# class Seq2Seq(tf.keras.Model):
-#   def __init__(self, num_features, hidden_size, dropout):
-#     self.encoder = Encoder(num_features, hidden_size, dropout)
-#     self.decoder = Decoder(num_features, hidden_size, dropout)
+class Seq2Seq(tf.keras.Model):
+  def __init__(self, num_features, hidden_size, dropout):
+    self.encoder = Encoder(num_features, hidden_size, dropout)
+    self.decoder = Decoder(num_features, hidden_size, dropout)
 
-#   def call(self, inputs):
-#     original, target = inputs
+  def call(self, inputs):
+    original, target = inputs
 
-#     enc_outputs, hidden, cell = self.encoder(original)
+    enc_outputs, hidden, cell = self.encoder(original)
 
-#     output = self.decoder(target, enc_outputs, hidden, cell)
+    output = self.decoder(target, enc_outputs, hidden, cell)
 
-#     return output
+    return output
 
 
 
