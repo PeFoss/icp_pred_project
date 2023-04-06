@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import math
@@ -26,10 +27,7 @@ experiment = Experiment(
 
 sns.set_style('whitegrid')
 
-lr = tf.keras.optimizers.schedules.ExponentialDecay(
-      initial_learning_rate=1e-3,
-      decay_steps=100000,
-      decay_rate=0.98)
+lr = tf.keras.optimizers.schedules.ExponentialDecay(3e-5,100000, 0.99)
 batch_size = 128
 epochs = 200
 
@@ -56,6 +54,7 @@ df.drop(['DateTime'], axis=1, inplace=True)
 df.columns = ['MAP', 'ICP', 'nICP']
 df.dropna(inplace=True)
 df = df[::3]
+
 """##Preprocessing function"""
 
 def process_data(sequence_length):
@@ -80,9 +79,6 @@ df = scaler.fit_transform(df)
 df = pd.DataFrame(df, columns = [['MAP', 'ICP', 'nICP']])
 Xtrain, Xtest, ytrain, ytest = process_data(100)
 
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, LSTM, Dense
-
 kfold = KFold(n_splits=5, shuffle=True)
 kfold_performances = []
 curr_fold = 0
@@ -101,22 +97,22 @@ for train, test in kfold.split(Xtrain):
   y_target_test = ytest_validate[:, :-1, :]
   y_target_test = np.concatenate((np.zeros([ytest_validate.shape[0], 1, ytest_validate.shape[2]]), y_target_test), axis=1)
 
-  encoder_inputs = Input(shape=(None, input_size_encoder))
-  encoder = LSTM(hidden_size, return_state=True, return_sequences=True)
+  encoder_inputs = tf.keras.Input(shape=(None, input_size_encoder))
+  encoder = tf.keras.layers.LSTM(hidden_size, return_state=True, return_sequences=True)
   encoder_outputs, state_h, state_c = encoder(encoder_inputs)
-  
+
   encoder_states = [state_h, state_c]
 
-  decoder_inputs = Input(shape=(None, input_size_decoder))
-  
-  decoder_lstm = LSTM(hidden_size, return_sequences=True, return_state=True)
+  decoder_inputs = tf.keras.Input(shape=(None, input_size_decoder))
+
+  decoder_lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True, return_state=True)
   decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
                                       initial_state=encoder_states)
-  decoder_dense = Dense(output_size, activation=None)
+  decoder_dense = tf.keras.layers.Dense(output_size, activation=None)
   decoder_outputs = decoder_dense(decoder_outputs)
 
-  
-  model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+  model = tf.keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
   model.compile(optimizer=keras.optimizers.Adam(lr), loss='mse', metrics=[tf.keras.metrics.RootMeanSquaredError()])
   model.fit([Xtrain_validate, y_target_train], ytrain_validate,
@@ -129,15 +125,15 @@ for train, test in kfold.split(Xtrain):
   curr_fold += 1
 experiment.log_metric("rmse_validation_average", np.average(np.array(kfold_performances)))
 
-encoder_model = Model(encoder_inputs, encoder_states)
-decoder_state_input_h = Input(shape=(hidden_size,))
-decoder_state_input_c = Input(shape=(hidden_size,))
+encoder_model = tf.keras.Model(encoder_inputs, encoder_states)
+decoder_state_input_h = tf.keras.Input(shape=(hidden_size,))
+decoder_state_input_c = tf.keras.Input(shape=(hidden_size,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 decoder_outputs, state_h, state_c = decoder_lstm(
     decoder_inputs, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
 decoder_outputs = decoder_dense(decoder_outputs)
-decoder_model = Model(
+decoder_model = tf.keras.Model(
     [decoder_inputs] + decoder_states_inputs,
     [decoder_outputs] + decoder_states)
 
@@ -148,7 +144,7 @@ def seq2seq(input_test):
 
   target_len = input_test.shape[1]
 
-  stop_condition = False 
+  stop_condition = False
 
   outputs = []
 
@@ -210,4 +206,4 @@ random_index = int(random.random() * (df_predicts.size - 100))
 ax4 = sns.lineplot(data=df_predicts.iloc[random_index: random_index + 100])
 ax4.set(ylim=(0, 1))
 experiment.log_figure(figure_name='predicts_seq_3', figure=ax4.figure)
-plt.show()
+plt.show()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
