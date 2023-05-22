@@ -1,9 +1,7 @@
-
 import numpy as np
 import pandas as pd
 import math
 
-from comet_ml import Experiment
 
 import pathlib
 
@@ -19,17 +17,12 @@ import random
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-experiment = Experiment(
-    api_key="LDTPm7HDAGLUZ8N17Hu0w12Cg",
-    project_name="icp-prediction",
-    workspace="pefoss",
-)
 
 sns.set_style('whitegrid')
 
 lr = tf.keras.optimizers.schedules.ExponentialDecay(3e-5,100000, 0.99)
 batch_size = 128
-epochs = 200
+epochs = 15
 
 hidden_size = 1024
 input_size_encoder = 2
@@ -41,8 +34,8 @@ tf.random.set_seed(1234)
 np.random.seed(1234)
 
 
-BASE_PATH = pathlib.Path().resolve().parent.parent.parent
-ICP_DATA_PATH = BASE_PATH / "scratch/gilbreth/pfosscon/nICP"
+BASE_PATH = pathlib.Path().resolve()
+ICP_DATA_PATH = BASE_PATH / "drive/MyDrive/ChopraLab/Project1-Data/nICP/"
 print(ICP_DATA_PATH)
 df = pd.DataFrame()
 
@@ -79,7 +72,7 @@ df = scaler.fit_transform(df)
 df = pd.DataFrame(df, columns = [['MAP', 'ICP', 'nICP']])
 Xtrain, Xtest, ytrain, ytest = process_data(100)
 
-kfold = KFold(n_splits=5, shuffle=True)
+kfold = KFold(n_splits=2, shuffle=True)
 kfold_performances = []
 curr_fold = 0
 for train, test in kfold.split(Xtrain):
@@ -108,8 +101,12 @@ for train, test in kfold.split(Xtrain):
   decoder_lstm = tf.keras.layers.LSTM(hidden_size, return_sequences=True, return_state=True)
   decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
                                       initial_state=encoder_states)
+  attn_layer = tf.keras.layers.MultiHeadAttention(key_dim=3, num_heads=10)
+  attn_outputs = attn_layer(decoder_outputs, encoder_outputs)
+  dense_input = tf.concat([decoder_outputs, attn_outputs], axis = -1)
+
   decoder_dense = tf.keras.layers.Dense(output_size, activation=None)
-  decoder_outputs = decoder_dense(decoder_outputs)
+  decoder_outputs = decoder_dense(dense_input)
 
 
   model = tf.keras.Model([encoder_inputs, decoder_inputs], decoder_outputs)
@@ -121,24 +118,29 @@ for train, test in kfold.split(Xtrain):
           verbose = 1)
   performance = model.evaluate([Xtest_validate, y_target_test], ytest_validate)[1]
   kfold_performances.append(performance)
-  experiment.log_metric('accuracy_fold_%d' % curr_fold, performance)
   curr_fold += 1
-experiment.log_metric("rmse_validation_average", np.average(np.array(kfold_performances)))
 
-encoder_model = tf.keras.Model(encoder_inputs, encoder_states)
+print(model.summary())
+
+encoder_model = tf.keras.Model(encoder_inputs, [encoder_outputs, encoder_states])
+
 decoder_state_input_h = tf.keras.Input(shape=(hidden_size,))
 decoder_state_input_c = tf.keras.Input(shape=(hidden_size,))
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
 decoder_outputs, state_h, state_c = decoder_lstm(
     decoder_inputs, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
+attn_outputs = attn_layer(
+    decoder_outputs, encoder_outputs)
+decoder_outputs = tf.concat([decoder_outputs, attn_outputs], axis = -1)
 decoder_outputs = decoder_dense(decoder_outputs)
 decoder_model = tf.keras.Model(
-    [decoder_inputs] + decoder_states_inputs,
+    [decoder_inputs, encoder_outputs] + decoder_states_inputs,
     [decoder_outputs] + decoder_states)
 
+
 def seq2seq(input_test):
-  state = encoder_model.predict(input_test)
+  enc_outputs, state = encoder_model.predict(input_test)
 
   target_seq = np.zeros((input_test.shape[0], 1, 1))
 
@@ -152,7 +154,7 @@ def seq2seq(input_test):
 
   while not stop_condition:
     output_tokens, h, c = decoder_model.predict(
-            [target_seq] + state)
+            [target_seq, enc_outputs] + state)
 
     state = [h, c]
 
@@ -170,11 +172,10 @@ def seq2seq(input_test):
 
   return np.concatenate(outputs, axis=1)
 
+outputs = seq2seq(Xtest[:500])
+print("Testing error ", np.sum(np.reshape(outputs, (outputs.shape[0], outputs.shape[1]))-ytest[:500])/(500 * ytest.shape[1]))
 
-
-outputs = seq2seq(Xtest)
-
-outputs, ytest, Xtest = outputs.flatten(), ytest.flatten(), Xtest[:, :, 1].flatten()
+outputs, ytest, Xtest = outputs.flatten(), ytest[:500].flatten(), Xtest[:500, :, 1].flatten()
 ytest = pd.DataFrame(ytest)
 predictX = pd.DataFrame(outputs)
 Xtest = pd.DataFrame(Xtest)
@@ -182,28 +183,11 @@ df_predicts = pd.concat([ytest, predictX, Xtest], axis=1)
 df_predicts.columns = ['Y test', 'Y Predicts', 'X test']
 df_predicts.set_index('X test', inplace=True)
 
-ax = sns.scatterplot(data=df_predicts[::100], x='Y Predicts', y='Y test')
+ax = sns.scatterplot(data=df_predicts, x='Y Predicts', y='Y test')
 ax.set(xlim=(0, 1))
-experiment.log_figure(figure_name='y_predicts vs. y_test', figure=ax.figure)
 plt.show()
 
 plt.figure()
-random_index = int(random.random() * (df_predicts.size - 100))
-ax2 = sns.lineplot(data=df_predicts.iloc[random_index: random_index + 100])
+ax2 = sns.lineplot(data=df_predicts)
 ax2.set(ylim=(0, 1))
-experiment.log_figure(figure_name='predicts_seq', figure=ax2.figure)
-plt.show()
-
-plt.figure()
-random_index = int(random.random() * (df_predicts.size - 100))
-ax3 = sns.lineplot(data=df_predicts.iloc[random_index: random_index + 100])
-ax3.set(ylim=(0, 1))
-experiment.log_figure(figure_name='predicts_seq_2', figure=ax3.figure)
-plt.show()
-
-plt.figure()
-random_index = int(random.random() * (df_predicts.size - 100))
-ax4 = sns.lineplot(data=df_predicts.iloc[random_index: random_index + 100])
-ax4.set(ylim=(0, 1))
-experiment.log_figure(figure_name='predicts_seq_3', figure=ax4.figure)
 plt.show()
